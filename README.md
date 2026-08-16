@@ -11,22 +11,29 @@ Location + Industry + Lead Count
             │
             ▼
    ┌─────────────────┐
-   │  1. Search       │  Finds candidate companies via SerpApi
+   │ 1. User Input    │  Validated CLI prompts (location, industry, count)
    └─────────────────┘
             │
             ▼
    ┌─────────────────┐
-   │  2. Extract      │  Scrapes each site for company details
+   │ 2. Search        │  Finds candidate companies via SerpApi;
+   │                  │  filters out directories & listicle articles
    └─────────────────┘
             │
             ▼
    ┌─────────────────┐
-   │  3. Contacts     │  Finds email, phone, and address
+   │ 3. Extract       │  Scrapes each site for about, founded, employees,
+   │                  │  socials, and company name (JSON-LD preferred)
    └─────────────────┘
             │
             ▼
    ┌─────────────────┐
-   │  4. Master Store │  Deduplicates and merges into one dataset
+   │ 4. Contacts      │  Finds email, phone, and address
+   └─────────────────┘
+            │
+            ▼
+   ┌─────────────────┐
+   │ Master Store     │  Deduplicates and merges into one dataset
    └─────────────────┘
             │
             ▼
@@ -35,87 +42,47 @@ Location + Industry + Lead Count
 
 ## Features
 
-- **Broad discovery** — searches multiple query variations and pages until the requested number of leads is found or genuinely exhausted.
-- **Directory & listicle filtering** — skips aggregator sites (JustDial, IndiaMART, LinkedIn, etc.) and "Top 10..." style article results, keeping only real company pages.
-- **Structured-data-first extraction** — prefers JSON-LD/schema.org data over guessed text, since it's far more reliable.
-- **Quality filters** — rejects junk emails (noreply@, placeholder domains), junk phone numbers (000000, 123456789), and false-positive addresses.
-- **Contact page fallback** — if the homepage has no contact info, tries common contact page paths (`/contact`, `/contact-us`, etc.) once.
-- **Deduplicated master store** — every run merges into a single running dataset keyed by domain, so re-running never creates duplicates; newer non-empty values overwrite stale ones.
-- **Safe by default** — bot-protected sites (Cloudflare, Akamai) are skipped rather than force-opened; API keys are never printed to logs.
+- **Broad discovery** — 6 query variations, paginated until the requested lead count is reached or genuinely exhausted (no hidden cap on lead count).
+- **Directory & listicle filtering** — skips aggregator sites (JustDial, IndiaMART, 99acres, etc.) and "Top 10..." style articles, keeping only real company pages.
+- **Structured-data-first extraction** — prefers JSON-LD/schema.org data over guessed text, for about, founded year, employee count, and company name.
+- **Quality filters** — rejects junk emails (noreply@, placeholders), junk phone numbers (JS placeholders, date-like false positives), and untrustworthy addresses (only structured data is used, never free-text guessing).
+- **Contact page fallback** — if the homepage has no contact info, tries `/contact`, `/contact-us`, etc. once.
+- **Deduplicated master store** — every run merges into one running dataset keyed by domain; re-running never creates duplicates.
+- **Safe by default** — bot-protected sites (Cloudflare, Akamai), SSL errors, and DNS failures are skipped and logged, never crash the pipeline. API keys are never printed to logs.
 
 ## Tech Stack
 
-- Python 3.10+
-- `requests` — HTTP fetching with retry logic
-- `beautifulsoup4` — HTML parsing
-- `python-dotenv` — environment variable management
-- [SerpApi](https://serpapi.com/) — Google search results
+Python 3.10+ · `requests` · `beautifulsoup4` · `python-dotenv` · [SerpApi](https://serpapi.com/)
 
 ## Setup
-
-**1. Clone the repository**
 
 ```bash
 git clone https://github.com/AdityaJha27/Smart-lead-generation.git
 cd Smart-lead-generation
-```
 
-**2. Create and activate a virtual environment**
-
-```bash
 python -m venv venv
+venv\Scripts\activate          # Windows
+source venv/bin/activate       # macOS/Linux
 
-# Windows
-venv\Scripts\activate
-
-# macOS/Linux
-source venv/bin/activate
-```
-
-**3. Install dependencies**
-
-```bash
 pip install -r requirements.txt
-```
 
-**4. Set up environment variables**
-
-```bash
-cp .env.example .env
-```
-
-Open `.env` and add your SerpApi key:
-
-```
-SERPAPI_KEY=your_key_here
+cp .env.example .env           # then add SERPAPI_KEY=your_key_here
 ```
 
 ## Usage
-
-Run the pipeline from the project root:
 
 ```bash
 python -m models.smart_lead_generation.run
 ```
 
-You'll be prompted for:
-
-- **Location** — e.g. `Mumbai, India`
-- **Industry** — e.g. `Real Estate`
-- **Number of leads** — how many companies to find
-
-The pipeline will search, extract, and print a summary once complete.
+You'll be prompted for **location**, **industry**, and **number of leads** — no fixed upper limit.
 
 ## Output
 
-Every run produces two things inside `output/`:
-
 | File | Description |
 |---|---|
-| `company_data_<timestamp>.json` / `.csv` | Snapshot of that specific run |
-| `master_leads.json` / `.csv` | Running, deduplicated dataset across all runs |
-
-Each record contains:
+| `output/company_data_<timestamp>.json` / `.csv` | Snapshot of that specific run |
+| `output/master_leads.json` / `.csv` | Running, deduplicated dataset across all runs |
 
 ```json
 {
@@ -134,21 +101,23 @@ Each record contains:
 }
 ```
 
+Fields are left empty when data genuinely can't be found — never guessed or fabricated.
+
 ## Project Structure
 
 ```
 AI_ENGINE/
 ├── models/
 │   └── smart_lead_generation/
-│       ├── company_extractor.py     # Scrapes about, founded, employees, socials
-│       ├── config.py                # Env vars and shared settings
-│       ├── contact_discovery.py     # Email, phone, address extraction
-│       ├── exporter.py              # JSON/CSV export
-│       ├── master_store.py          # Deduplicated master dataset
-│       ├── run.py                   # Pipeline entry point
-│       ├── search_engine.py         # Company discovery via SerpApi
-│       └── user_input.py            # CLI input collection
-├── output/                          # Generated at runtime, not tracked in git
+│       ├── user_input.py          # Module 1: CLI input collection
+│       ├── search_engine.py       # Module 2: company discovery via SerpApi
+│       ├── company_extractor.py   # Module 3: about, founded, employees, socials, name
+│       ├── contact_discovery.py   # Module 4: email, phone, address extraction
+│       ├── master_store.py        # Deduplicated master dataset
+│       ├── exporter.py            # JSON/CSV export
+│       ├── config.py              # Env vars and shared settings
+│       └── run.py                 # Pipeline entry point
+├── output/                        # Generated at runtime, not tracked in git
 ├── .env.example
 ├── .gitignore
 └── requirements.txt
@@ -156,6 +125,18 @@ AI_ENGINE/
 
 ## Design Notes
 
-- Contact extraction only trusts structured data (JSON-LD/microdata) for addresses — a free-text label fallback was tried and dropped because it kept picking up testimonials and cookie-popup text instead of real addresses. Fewer filled rows with zero garbage is the right tradeoff here.
-- JS-rendered sites and bot-protected pages are intentionally skipped rather than force-opened with a headless browser — that belongs in a separate, dedicated enrichment pass.
-- Lead count has no artificial low ceiling; the pipeline searches as many query variations and pages as needed (up to a high safety ceiling) to genuinely try to hit the requested number.
+- Address extraction only trusts structured data (JSON-LD/microdata) — a free-text label fallback was tried and dropped after it picked up testimonials and cookie-popup text instead of real addresses.
+- Bot-protected/JS-rendered sites are skipped, not force-opened with a headless browser — that belongs in a later, dedicated enrichment pass.
+- No artificial cap on lead count — the pipeline genuinely tries to find as many real companies as exist for the given location/industry.
+
+## Roadmap
+
+- [x] Module 1 — User Input Collection
+- [x] Module 2 — Business Search Engine
+- [x] Module 3 — Company Data Extraction
+- [x] Module 4 — Contact Discovery
+- [ ] Module 5 — Lead Data Enrichment (services/products)
+- [ ] Module 6 — Email Verification
+- [ ] Module 7 — AI Lead Scoring
+- [ ] Module 8 — Deduplication & Quality Filtering
+- [ ] Module 9 — Output Formatting & CRM Export
