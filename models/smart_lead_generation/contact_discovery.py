@@ -3,6 +3,7 @@ import logging
 import re
 import urllib.parse as _urlparse
 
+import phonenumbers
 import requests
 import urllib3
 from bs4 import BeautifulSoup
@@ -38,12 +39,15 @@ JUNK_EMAIL_PATTERNS = (
     re.compile(r"^\d{6,}@"),
 )
 
-JUNK_PHONE_PATTERNS = (
-    re.compile(r"^0+$"),
-    re.compile(r"^1234567?890?$"),
-)
-
 JUNK_PHONE_LITERALS = {"undefined", "null", "none", "n/a", "na", ""}
+
+COUNTRY_NAME_TO_ISO = {
+    "india": "IN", "usa": "US", "united states": "US",
+    "uk": "GB", "united kingdom": "GB",
+    "uae": "AE", "united arab emirates": "AE", "dubai": "AE",
+    "canada": "CA", "australia": "AU", "singapore": "SG",
+    "germany": "DE", "france": "FR", "china": "CN", "japan": "JP",
+}
 
 _session = requests.Session()
 _session.headers.update(config.HEADERS)
@@ -57,6 +61,7 @@ def discover_contact(company: dict) -> dict:
     result = {**company, "email": None, "phone": None, "address": None, "contact_page_used": None}
 
     website = company.get("website", "")
+    default_region = _region_from_location(company.get("location", ""))
     email: str | None = None
     phone: str | None = None
     address: str | None = None
@@ -65,7 +70,7 @@ def discover_contact(company: dict) -> dict:
     html = _fetch(website)
     if html:
         email = _extract_email(html, website)
-        phone = _extract_phone(html)
+        phone = _extract_phone(html, default_region)
         address = _extract_address(html)
 
     if not email:
@@ -75,7 +80,7 @@ def discover_contact(company: dict) -> dict:
                 continue
             page_used = website.rstrip("/") + path
             email = email or _extract_email(candidate_html, website)
-            phone = phone or _extract_phone(candidate_html)
+            phone = phone or _extract_phone(candidate_html, default_region)
             address = address or _extract_address(candidate_html)
             if email:
                 break
@@ -118,34 +123,41 @@ def _extract_email(html: str, website: str) -> str | None:
     return own_domain[0] if own_domain else sorted(clean)[0]
 
 
-def _extract_phone(html: str) -> str | None:
+def _extract_phone(html: str, default_region: str | None) -> str | None:
     soup = BeautifulSoup(html, "html.parser")
 
     tel_link = soup.find("a", href=re.compile(r"^tel:"))
     if tel_link:
-        number = _urlparse.unquote(tel_link["href"].split(":", 1)[1].strip())
-        if number.lower() not in JUNK_PHONE_LITERALS and _looks_like_phone(number):
-            return number
+        raw = _urlparse.unquote(tel_link["href"].split(":", 1)[1].strip())
+        validated = _validate_phone(raw, default_region)
+        if validated:
+            return validated
 
     text = soup.get_text(" ", strip=True)
     for match in PHONE_PATTERN.findall(text):
-        if _looks_like_phone(match):
-            return match.strip()
+        validated = _validate_phone(match, default_region)
+        if validated:
+            return validated
     return None
 
 
-def _looks_like_phone(candidate: str) -> bool:
-    digits = re.sub(r"\D", "", candidate)
-    if not (7 <= len(digits) <= 13):
-        return False
-    if _is_junk_phone(digits):
-        return False
-    # avoids matching things like "2026-2027" as a phone number
-    if len(digits) == 8:
-        y1, y2 = int(digits[:4]), int(digits[4:])
-        if 1990 <= y1 <= 2035 and 1990 <= y2 <= 2035 and 0 <= (y2 - y1) <= 1:
-            return False
-    return True
+def _region_from_location(location: str) -> str | None:
+    if not location:
+        return None
+    tail = location.split(",")[-1].strip().lower()
+    return COUNTRY_NAME_TO_ISO.get(tail)
+
+
+def _validate_phone(candidate: str, default_region: str | None) -> str | None:
+    if candidate.lower().strip() in JUNK_PHONE_LITERALS:
+        return None
+    try:
+        parsed = phonenumbers.parse(candidate, default_region)
+    except phonenumbers.NumberParseException:
+        return None
+    if not phonenumbers.is_valid_number(parsed):
+        return None
+    return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.INTERNATIONAL)
 
 
 def _extract_address(html: str) -> str | None:
@@ -192,11 +204,6 @@ def _is_junk_email(email: str) -> bool:
     if any(junk in local for junk in JUNK_EMAIL_LOCAL_PARTS):
         return True
     return any(p.search(email) for p in JUNK_EMAIL_PATTERNS)
-
-
-def _is_junk_phone(number: str) -> bool:
-    digits_only = re.sub(r"\D", "", number)
-    return any(p.match(digits_only) for p in JUNK_PHONE_PATTERNS)
 
 
 def _domain_of(url: str) -> str:

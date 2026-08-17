@@ -46,7 +46,7 @@ def search_companies(location: str, industry: str, num_leads: int) -> list[dict]
     for query in _build_queries(location, industry):
         if len(leads) >= num_leads or calls_used >= MAX_TOTAL_SEARCH_CALLS:
             break
-        calls_used = _collect_from_query(query, num_leads, leads, seen_domains, calls_used)
+        calls_used = _collect_from_query(query, location, num_leads, leads, seen_domains, calls_used)
 
     if len(leads) < num_leads:
         logger.warning(
@@ -75,7 +75,7 @@ def _build_queries(location: str, industry: str) -> list[str]:
 
 
 def _collect_from_query(
-    query: str, num_leads: int, leads: list[dict], seen_domains: set[str], calls_used: int
+    query: str, location: str, num_leads: int, leads: list[dict], seen_domains: set[str], calls_used: int
 ) -> int:
     pages_needed = math.ceil(num_leads / config.RESULTS_PER_PAGE)
     max_pages = min(pages_needed, config.MAX_PAGES_SAFETY_LIMIT)
@@ -99,6 +99,7 @@ def _collect_from_query(
             leads.append({
                 "company_name": _clean_title(title),
                 "website": f"https://{domain}",
+                "location": location,
             })
             seen_domains.add(domain)
 

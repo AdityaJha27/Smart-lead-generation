@@ -3,12 +3,13 @@ import logging
 from . import exporter, master_store
 from .company_extractor import extract_companies
 from .contact_discovery import discover_contacts
+from .email_verification import verify_emails
+from .lead_enrichment import enrich_leads
 from .search_engine import search_companies
 from .user_input import collect_user_input
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
-# stops urllib3 from printing our serpapi key in its request-url warnings
 logging.getLogger("urllib3").setLevel(logging.ERROR)
 logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
 
@@ -25,12 +26,25 @@ def main() -> None:
     print("\nDiscovering contact info...")
     with_contacts = discover_contacts(enriched)
 
-    exporter.export(with_contacts, "company_data")
-    master_store.upsert(with_contacts)
+    print("\nEnriching services/products...")
+    fully_enriched = enrich_leads(with_contacts)
 
-    ok = sum(1 for r in with_contacts if r["about"])
-    contacts_found = sum(1 for r in with_contacts if r["email"] or r["phone"])
-    print(f"\nDone: {ok}/{len(with_contacts)} fully enriched, {contacts_found}/{len(with_contacts)} with contact info.")
+    print("\nVerifying emails...")
+    fully_enriched = verify_emails(fully_enriched)
+
+    exporter.export(fully_enriched, "company_data")
+    master_store.upsert(fully_enriched)
+
+    ok = sum(1 for r in fully_enriched if r["about"])
+    contacts_found = sum(1 for r in fully_enriched if r["email"] or r["phone"])
+    services_found = sum(1 for r in fully_enriched if r["services"] or r["products"])
+    valid_emails = sum(1 for r in fully_enriched if r["email_status"] == "valid")
+    print(
+        f"\nDone: {ok}/{len(fully_enriched)} fully enriched, "
+        f"{contacts_found}/{len(fully_enriched)} with contact info, "
+        f"{services_found}/{len(fully_enriched)} with services/products, "
+        f"{valid_emails}/{len(fully_enriched)} with verified emails."
+    )
     print("Snapshot -> output/company_data_<timestamp>.json/.csv")
     print("Master   -> output/master_leads.json/.csv")
 
