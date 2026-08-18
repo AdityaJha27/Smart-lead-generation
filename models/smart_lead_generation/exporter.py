@@ -6,7 +6,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-OUTPUT_DIR = Path(__file__).resolve().parents[2] / "output"  # AI_ENGINE/output
+OUTPUT_DIR = Path(__file__).resolve().parents[2] / "output"
 
 
 def export(records: list[dict], base_filename: str) -> tuple[Path, Path]:
@@ -44,4 +44,6 @@ def _write_csv(records: list[dict], path: Path) -> None:
 def _flatten(value):
     if isinstance(value, list):
         return ", ".join(str(v) for v in value)
+    if isinstance(value, dict):
+        return ", ".join(f"{k}: {v}" for k, v in value.items())
     return value if value is not None else ""
