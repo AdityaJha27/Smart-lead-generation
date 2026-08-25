@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-ROOT_DIR = Path(__file__).resolve().parents[2]  # AI_ENGINE/
+ROOT_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT_DIR / ".env")
 
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
@@ -25,3 +25,5 @@ HEADERS = {
 }
 EXTRACTION_TIMEOUT = 10
 BLOCKED_PAGE_MARKERS = ("access denied", "reference #", "captcha", "cloudflare", "akamai")
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")

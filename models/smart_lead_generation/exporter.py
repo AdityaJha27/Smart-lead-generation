@@ -43,7 +43,7 @@ def _write_csv(records: list[dict], path: Path) -> None:
 
 def _flatten(value):
     if isinstance(value, list):
-        return ", ".join(str(v) for v in value)
+        return ", ".join(_flatten(v) if isinstance(v, (list, dict)) else str(v) for v in value)
     if isinstance(value, dict):
-        return ", ".join(f"{k}: {v}" for k, v in value.items())
+        return ", ".join(f"{k}: {_flatten(v) if isinstance(v, (list, dict)) else v}" for k, v in value.items())
     return value if value is not None else ""

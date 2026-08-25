@@ -4,3 +4,4 @@ beautifulsoup4==4.12.3
 urllib3>=2.0
 phonenumbers==9.0.37
 dnspython==2.8.0
+google-genai==2.19.0

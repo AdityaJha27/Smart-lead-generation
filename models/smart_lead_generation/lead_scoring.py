@@ -10,6 +10,8 @@ WEIGHTS = {
     "services_or_products": 10,
     "founded": 10,
     "employees": 10,
+    "company_linkedin": 10,
+    "maps_rating": 10,
 }
 
 SOCIAL_ONE_PROFILE_POINTS = 3
@@ -53,13 +55,31 @@ def score_lead(company: dict) -> dict:
         breakdown["employees"] = WEIGHTS["employees"]
         reasons.append("Employee count known")
 
-    social_count = len(company.get("social_media") or [])
+    social_links = company.get("social_media") or []
+    social_count = len(social_links)
     if social_count >= 2:
         breakdown["social_media"] = SOCIAL_MULTI_PROFILE_POINTS
         reasons.append(f"{social_count} social media profiles found")
     elif social_count == 1:
         breakdown["social_media"] = SOCIAL_ONE_PROFILE_POINTS
         reasons.append("Social media profile found")
+
+    has_company_linkedin = any("linkedin.com/company/" in link.lower() for link in social_links)
+    if has_company_linkedin:
+        breakdown["company_linkedin"] = WEIGHTS["company_linkedin"]
+        reasons.append("Has a verified company LinkedIn page")
+
+    rating = company.get("maps_rating")
+    if rating is not None:
+        if rating >= 4.5:
+            breakdown["maps_rating"] = WEIGHTS["maps_rating"]
+            reasons.append(f"Excellent Google rating ({rating})")
+        elif rating >= 4.0:
+            breakdown["maps_rating"] = round(WEIGHTS["maps_rating"] * 0.6)
+            reasons.append(f"Good Google rating ({rating})")
+        elif rating >= 3.0:
+            breakdown["maps_rating"] = round(WEIGHTS["maps_rating"] * 0.3)
+            reasons.append(f"Average Google rating ({rating})")
 
     score = min(sum(breakdown.values()), 100)
     result["lead_score"] = score

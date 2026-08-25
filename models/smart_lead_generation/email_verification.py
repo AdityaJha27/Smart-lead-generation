@@ -1,16 +1,3 @@
-"""
-Module 6: Email Verification
-
-Input:  list of records from Module 5 (must include 'email')
-Output: same records with an added 'email_status' field
-
-Checks syntax validity and whether the email's domain has a working MX
-record (can actually receive mail). Does not attempt SMTP handshake
-verification - most mail servers block or rate-limit that, and it risks
-getting the sending IP flagged. MX-record checking is the practical
-ceiling without a paid verification service.
-"""
-
 import logging
 import re
 

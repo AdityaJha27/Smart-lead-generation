@@ -46,7 +46,7 @@ def search_companies(location: str, industry: str, num_leads: int) -> list[dict]
     for query in _build_queries(location, industry):
         if len(leads) >= num_leads or calls_used >= MAX_TOTAL_SEARCH_CALLS:
             break
-        calls_used = _collect_from_query(query, location, num_leads, leads, seen_domains, calls_used)
+        calls_used = _collect_from_query(query, location, industry, num_leads, leads, seen_domains, calls_used)
 
     if len(leads) < num_leads:
         logger.warning(
@@ -75,7 +75,7 @@ def _build_queries(location: str, industry: str) -> list[str]:
 
 
 def _collect_from_query(
-    query: str, location: str, num_leads: int, leads: list[dict], seen_domains: set[str], calls_used: int
+    query: str, location: str, industry: str, num_leads: int, leads: list[dict], seen_domains: set[str], calls_used: int
 ) -> int:
     pages_needed = math.ceil(num_leads / config.RESULTS_PER_PAGE)
     max_pages = min(pages_needed, config.MAX_PAGES_SAFETY_LIMIT)
@@ -100,6 +100,7 @@ def _collect_from_query(
                 "company_name": _clean_title(title),
                 "website": f"https://{domain}",
                 "location": location,
+                "industry": industry,
             })
             seen_domains.add(domain)
 
@@ -128,7 +129,6 @@ def _google_search(query: str, start: int = 0) -> list[dict]:
         response = _session.get(config.SERPAPI_URL, params=params, timeout=config.REQUEST_TIMEOUT)
         response.raise_for_status()
     except requests.RequestException:
-        # not logging the exception directly, it embeds the api key in the url
         logger.error("SerpApi request failed for query=%r start=%d", query, start)
         return []
 
